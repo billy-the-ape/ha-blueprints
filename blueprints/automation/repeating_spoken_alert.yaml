@@ -1,0 +1,259 @@
+blueprint:
+  name: Repeating escalating spoken alert
+  description: >-
+    After an entity remains in an alert state for a configured duration,
+    repeatedly announce a message while that state remains active. The media
+    player volume can increase on every announcement. An optional sound can
+    play before the message beginning on a selected iteration.
+  domain: automation
+  author: OpenAI
+  homeassistant:
+    min_version: 2024.6.0
+  input:
+    monitored_entity:
+      name: Monitored entity
+      description: The binary sensor, input boolean, or switch to watch.
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+            - domain: input_boolean
+            - domain: switch
+
+    alert_state:
+      name: Alert state
+      description: The state that means the problem is active.
+      default: "on"
+      selector:
+        text:
+
+    initial_delay:
+      name: Time before the first announcement
+      default:
+        hours: 0
+        minutes: 3
+        seconds: 0
+      selector:
+        duration:
+
+    repeat_interval:
+      name: Time between announcements
+      default:
+        hours: 0
+        minutes: 1
+        seconds: 0
+      selector:
+        duration:
+
+    tts_entity:
+      name: Text-to-speech engine
+      selector:
+        entity:
+          filter:
+            - domain: tts
+
+    media_player:
+      name: Media player
+      selector:
+        entity:
+          filter:
+            - domain: media_player
+
+    message:
+      name: Announcement
+      default: "Attention. The monitored condition still needs to be resolved."
+      selector:
+        text:
+          multiline: true
+
+    starting_volume:
+      name: Starting volume
+      description: A value from 0.0 to 1.0.
+      default: 0.40
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: slider
+
+    volume_step:
+      name: Volume increase per repeat
+      description: Added after each announcement, up to the maximum volume.
+      default: 0.10
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: slider
+
+    maximum_volume:
+      name: Maximum volume
+      default: 1.0
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: slider
+
+    restore_original_volume:
+      name: Restore the original volume afterward
+      default: true
+      selector:
+        boolean:
+
+    maximum_announcements:
+      name: Maximum number of announcements
+      description: Use 0 for no limit; the entity state will be the only stop condition.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          mode: box
+
+    warning_sound:
+      name: Optional warning sound
+      description: >-
+        Leave blank to disable. Use a playable URL or a Home Assistant media-source
+        URI such as media-source://media_source/local/warning.mp3.
+      default: ""
+      selector:
+        text:
+
+    warning_sound_start_iteration:
+      name: First iteration with the warning sound
+      description: Iteration 1 is the first announcement.
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          mode: box
+
+    warning_sound_repeat_every:
+      name: Repeat warning sound every N iterations
+      description: >-
+        Use 1 to play it on every announcement from the start iteration onward.
+        Use 0 to play it only on the start iteration.
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          mode: box
+
+    warning_sound_lead_time:
+      name: Warning sound lead time
+      description: Time to allow the sound to play before speaking the message.
+      default:
+        hours: 0
+        minutes: 0
+        seconds: 3
+      selector:
+        duration:
+
+variables:
+  watched: !input monitored_entity
+  active_state: !input alert_state
+  player: !input media_player
+  speech_engine: !input tts_entity
+  alert_message: !input message
+  first_volume: !input starting_volume
+  volume_increment: !input volume_step
+  volume_ceiling: !input maximum_volume
+  restore_volume: !input restore_original_volume
+  announcement_limit: !input maximum_announcements
+  sound_uri: !input warning_sound
+  sound_start: !input warning_sound_start_iteration
+  sound_frequency: !input warning_sound_repeat_every
+  original_volume: "{{ state_attr(player, 'volume_level') }}"
+
+trigger:
+  - platform: state
+    entity_id: !input monitored_entity
+    to: !input alert_state
+    for: !input initial_delay
+
+condition:
+  - condition: template
+    value_template: "{{ is_state(watched, active_state) }}"
+
+action:
+  - repeat:
+      while:
+        - condition: template
+          value_template: >-
+            {{ is_state(watched, active_state)
+               and (announcement_limit | int(0) == 0
+                    or repeat.index <= announcement_limit | int(0)) }}
+      sequence:
+        - service: media_player.volume_set
+          target:
+            entity_id: "{{ player }}"
+          data:
+            volume_level: >-
+              {{ [first_volume | float(0.4)
+                  + ((repeat.index - 1) * (volume_increment | float(0.1))),
+                  volume_ceiling | float(1)] | min }}
+
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {{ sound_uri | trim | length > 0
+                       and repeat.index >= sound_start | int(1)
+                       and (
+                         (sound_frequency | int(0) == 0
+                          and repeat.index == sound_start | int(1))
+                         or
+                         (sound_frequency | int(0) > 0
+                          and (repeat.index - sound_start | int(1))
+                              % (sound_frequency | int(1)) == 0)
+                       ) }}
+              sequence:
+                - service: media_player.play_media
+                  target:
+                    entity_id: "{{ player }}"
+                  data:
+                    media_content_id: "{{ sound_uri }}"
+                    media_content_type: music
+                - delay: !input warning_sound_lead_time
+
+        - service: tts.speak
+          target:
+            entity_id: "{{ speech_engine }}"
+          data:
+            media_player_entity_id: "{{ player }}"
+            message: "{{ alert_message }}"
+
+        - wait_template: "{{ not is_state(watched, active_state) }}"
+          timeout: !input repeat_interval
+          continue_on_timeout: true
+
+        # If the problem cleared during the wait, end this iteration. The while
+        # condition then evaluates false and the loop exits.
+        - condition: template
+          value_template: "{{ not wait.completed }}"
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ restore_volume
+                 and original_volume is not none
+                 and original_volume | float(-1) >= 0 }}
+        sequence:
+          - service: media_player.volume_set
+            target:
+              entity_id: "{{ player }}"
+            data:
+              volume_level: "{{ original_volume | float }}"
+
+mode: restart
+max_exceeded: silent
