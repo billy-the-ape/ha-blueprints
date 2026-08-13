@@ -6,7 +6,7 @@ blueprint:
     to optional end actions when the entity enters its resolved state. Repeating
     actions can use {{ loop_index }} or {{ repeat.index }} in templates.
   domain: automation
-  author: OpenAI
+  author: billy-the-ape and OpenAI
   homeassistant:
     min_version: 2024.6.0
   input:
