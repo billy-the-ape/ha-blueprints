@@ -6,7 +6,7 @@ blueprint:
     player volume can increase on every announcement. An optional sound can
     play before the message beginning on a selected iteration.
   domain: automation
-  author: OpenAI
+  author: billy-the-ape and OpenAI
   homeassistant:
     min_version: 2024.6.0
   input:
