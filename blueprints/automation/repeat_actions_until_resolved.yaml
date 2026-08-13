@@ -1,0 +1,168 @@
+blueprint:
+  name: Repeat any actions until a state is resolved
+  description: >-
+    Run optional start actions once after an entity remains in an active state,
+    repeat any user-configured actions at an interval, and immediately switch
+    to optional end actions when the entity enters its resolved state. Repeating
+    actions can use {{ loop_index }} or {{ repeat.index }} in templates.
+  domain: automation
+  author: OpenAI
+  homeassistant:
+    min_version: 2024.6.0
+  input:
+    state_settings:
+      name: State and timing
+      icon: mdi:repeat
+      input:
+        monitored_entity:
+          name: Monitored entity
+          description: The binary sensor, input boolean, or switch to watch.
+          selector:
+            entity:
+              filter:
+                - domain: binary_sensor
+                - domain: input_boolean
+                - domain: switch
+
+        active_state:
+          name: Active/error state
+          description: The state that starts and keeps the repeating sequence active.
+          default: "on"
+          selector:
+            text:
+
+        resolved_state:
+          name: Resolved/end state
+          description: Entering this state cancels the active loop and runs the end actions.
+          default: "off"
+          selector:
+            text:
+
+        initial_delay:
+          name: Time active before starting
+          description: Start actions and the first loop run occur after this duration.
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 0
+          selector:
+            duration:
+
+        loop_interval:
+          name: Loop interval
+          description: Delay after one repeating action group finishes and before the next starts.
+          default:
+            hours: 0
+            minutes: 1
+            seconds: 0
+          selector:
+            duration:
+
+        skip_end_if_never_started:
+          name: Skip end actions if the initial delay was not reached
+          description: >-
+            For example, opening and closing a door before the alert threshold
+            will do nothing, including skipping the end actions.
+          default: true
+          selector:
+            boolean:
+
+    action_settings:
+      name: Action groups
+      icon: mdi:play-box-multiple
+      input:
+        start_actions:
+          name: Start actions
+          description: Run once when the initial delay has elapsed, before iteration 1.
+          default: []
+          selector:
+            action:
+
+        repeating_actions:
+          name: Active/error-state actions
+          description: >-
+            Run once per iteration while the entity remains active. Templates in
+            these actions may use {{ loop_index }} or {{ repeat.index }}; numbering
+            begins at 1.
+          default: []
+          selector:
+            action:
+
+        end_actions:
+          name: End/resolved-state actions
+          description: Run once after the active loop is cancelled by the resolved state.
+          default: []
+          selector:
+            action:
+
+variables:
+  watched_entity: !input monitored_entity
+  error_state: !input active_state
+  end_state: !input resolved_state
+  start_delay: !input initial_delay
+  suppress_early_end: !input skip_end_if_never_started
+  start_delay_seconds: >-
+    {{ (start_delay.get('hours', 0) | float(0) * 3600)
+       + (start_delay.get('minutes', 0) | float(0) * 60)
+       + (start_delay.get('seconds', 0) | float(0)) }}
+
+trigger:
+  - platform: state
+    entity_id: !input monitored_entity
+    to: !input active_state
+    for: !input initial_delay
+    id: started
+
+  - platform: state
+    entity_id: !input monitored_entity
+    from: !input active_state
+    to: !input resolved_state
+    id: resolved
+
+action:
+  - choose:
+      - alias: Error state remained active long enough
+        conditions:
+          - condition: trigger
+            id: started
+          - condition: template
+            value_template: "{{ is_state(watched_entity, error_state) }}"
+        sequence:
+          - alias: Run start actions once
+            sequence: !input start_actions
+
+          - alias: Repeat configured actions while the error state remains active
+            repeat:
+              while:
+                - condition: template
+                  value_template: "{{ is_state(watched_entity, error_state) }}"
+              sequence:
+                - variables:
+                    loop_index: "{{ repeat.index }}"
+
+                - alias: Run active/error-state actions
+                  sequence: !input repeating_actions
+
+                - alias: Wait before the next iteration
+                  delay: !input loop_interval
+
+      - alias: Entity entered its resolved state
+        conditions:
+          - condition: trigger
+            id: resolved
+          - condition: template
+            value_template: >-
+              {{ not suppress_early_end
+                 or (
+                   trigger.from_state is not none
+                   and trigger.to_state is not none
+                   and (as_timestamp(trigger.to_state.last_changed)
+                        - as_timestamp(trigger.from_state.last_changed))
+                       >= start_delay_seconds | float(0)
+                 ) }}
+        sequence:
+          - alias: Run end actions once
+            sequence: !input end_actions
+
+mode: restart
+max_exceeded: silent
