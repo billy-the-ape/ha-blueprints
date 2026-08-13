@@ -4,12 +4,30 @@ Reusable Home Assistant automation blueprints for state-aware alerts and action 
 
 ## Blueprints
 
-### Repeat any actions until a state is resolved
+### Auto Annoyer: Repeat any actions until a state is resolved
 
-Runs optional start actions once, repeats any user-configured action list while a
-binary state remains active, and runs optional end actions once when the state
-resolves. Repeating actions can use `{{ loop_index }}` or
-`{{ repeat.index }}` in templates.
+Any door left open. Any bad temp in a machine. Any package is detected. 
+
+Basically anything that needs to be addressed and is detectable by home assistant.
+
+Example: Bug your kids with a google home announcement that increases in volume,
+because they left the freezer open in the garage.
+
+Example: Bug your kids to shut the damn door they left cracked open that's letting
+all the A/C out.
+
+Example: Bug yourself because your server is overheating.
+
+Bug people with automation™
+
+Once they resolve the issue, play a happy noise and congratulate them, something idk
+
+---
+
+This blueprint runs optional start actions once, repeats any user-configured action 
+list while a binary state remains active, and runs optional end actions once when 
+the state resolves. Repeating actions can use `{{ loop_index }}` or `{{ repeat.index }}` 
+in templates.
 
 [View blueprint](blueprints/automation/repeat_actions_until_resolved.yaml)
 
@@ -19,7 +37,7 @@ Import URL:
 https://github.com/billy-the-ape/ha-blueprints/blob/main/blueprints/automation/repeat_actions_until_resolved.yaml
 ```
 
-### Repeating escalating spoken alert
+### Early Version Auto Annoyer: Repeating escalating spoken alert
 
 Announces a configurable message while a binary state remains active, increasing
 the media-player volume on each iteration up to a configured limit. It can play
