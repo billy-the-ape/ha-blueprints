@@ -20,7 +20,8 @@ Example: Bug yourself because your server is overheating.
 
 Bug people with automation™
 
-Once they resolve the issue, play a happy noise and congratulate them, something idk
+Once they resolve the issue, stop being annoying and play a happy noise and congratulate 
+them. Or something whatever idc
 
 ---
 
