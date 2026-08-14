@@ -25,9 +25,10 @@ them. Or something whatever idc
 
 ---
 
-This blueprint runs optional start actions once, repeats any user-configured action 
-list while a binary state remains active, and runs optional end actions once when 
-the state resolves. Repeating actions can use `{{ loop_index }}` or `{{ repeat.index }}` 
+This blueprint starts from anything configurable in Home Assistant's normal trigger
+editor, runs optional start actions once, repeats any user-configured action list
+while a binary state remains active, and runs optional end actions once when the
+state resolves. Repeating actions can use `{{ loop_index }}` or `{{ repeat.index }}`
 in templates.
 
 [View blueprint](blueprints/automation/repeat_actions_until_resolved.yaml)
@@ -60,7 +61,8 @@ https://github.com/billy-the-ape/ha-blueprints/blob/main/blueprints/automation/r
 3. Paste one of the GitHub URLs above and select **Preview**.
 4. Import the blueprint, then select **Create automation**.
 
-Both blueprints require Home Assistant 2024.6.0 or newer.
+The generic action-loop blueprint requires Home Assistant 2024.10.0 or newer.
+The spoken-alert blueprint requires Home Assistant 2024.6.0 or newer.
 
 ## Updating
 
