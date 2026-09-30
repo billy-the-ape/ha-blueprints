@@ -4,8 +4,9 @@ blueprint:
     Start from any user-configured Home Assistant trigger, run optional start
     actions once, repeat any user-configured actions while a monitored entity
     remains active, and run optional end actions once when that entity reaches
-    its resolved state. Repeating actions can use {{ loop_index }} or
-    {{ repeat.index }} in templates.
+    its resolved state or the configured maximum loop count is reached.
+    Repeating actions can use {{ loop_index }} or {{ repeat.index }} in
+    templates.
   domain: automation
   author: billy-the-ape and OpenAI
   homeassistant:
@@ -64,6 +65,18 @@ blueprint:
           selector:
             duration:
 
+        max_loops:
+          name: Maximum loops
+          description: >-
+            Maximum number of repeating iterations before forcing the loop to end
+            and running the end actions. Use 0 for unlimited.
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 1000
+              mode: box
+
     action_settings:
       name: Action groups
       icon: mdi:play-box-multiple
@@ -87,7 +100,9 @@ blueprint:
 
         end_actions:
           name: End/resolved-state actions
-          description: Run once after the monitored entity reaches its resolved state.
+          description: >-
+            Run once after the monitored entity resolves or the maximum loop
+            count is reached.
           default: []
           selector:
             action:
@@ -96,6 +111,7 @@ variables:
   watched_entity: !input monitored_entity
   error_state: !input active_state
   end_state: !input resolved_state
+  max_loop_count: !input max_loops
 
 triggers:
   - triggers: !input start_triggers
@@ -112,7 +128,14 @@ actions:
     repeat:
       while:
         - condition: template
-          value_template: "{{ is_state(watched_entity, error_state) }}"
+          value_template: >-
+            {{
+              is_state(watched_entity, error_state)
+              and (
+                max_loop_count | int(0) == 0
+                or repeat.index <= max_loop_count | int(0)
+              )
+            }}
       sequence:
         - variables:
             loop_index: "{{ repeat.index }}"
@@ -129,10 +152,6 @@ actions:
         # the while condition re-evaluate false and exit the loop.
         - condition: template
           value_template: "{{ not wait.completed }}"
-
-  - alias: Confirm the monitored entity actually resolved
-    condition: template
-    value_template: "{{ is_state(watched_entity, end_state) }}"
 
   - alias: Run end actions once
     sequence: !input end_actions
