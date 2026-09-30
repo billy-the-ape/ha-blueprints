@@ -3,10 +3,10 @@ blueprint:
   description: >-
     Start from any user-configured Home Assistant trigger, run optional start
     actions once, repeat any user-configured actions while a monitored entity
-    remains active, and run optional end actions once when that entity reaches
-    its resolved state or the configured maximum loop count is reached.
-    Repeating actions can use {{ loop_index }} or {{ repeat.index }} in
-    templates.
+    remains active, and run optional end actions once when that entity remains
+    resolved for the configured grace period or the configured maximum loop
+    count is reached. Repeating actions can use {{ loop_index }} or
+    {{ repeat.index }} in templates.
   domain: automation
   author: billy-the-ape and OpenAI
   homeassistant:
@@ -48,16 +48,29 @@ blueprint:
 
         resolved_state:
           name: Resolved/end state
-          description: Reaching this state ends the loop and runs the end actions.
+          description: Reaching this state begins the optional resolution grace period.
           default: "off"
           selector:
             text:
+
+        resolution_grace:
+          name: Resolution grace period
+          description: >-
+            Require the monitored entity to remain resolved for this duration
+            before ending the loop. If it becomes active again during the grace
+            period, looping continues. Use 0 seconds to end immediately.
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 0
+          selector:
+            duration:
 
         loop_interval:
           name: Loop interval
           description: >-
             Maximum wait after one repeating action group finishes and before the
-            next starts. Resolution ends this wait immediately.
+            next starts. Resolution begins the grace-period check immediately.
           default:
             hours: 0
             minutes: 1
@@ -101,8 +114,8 @@ blueprint:
         end_actions:
           name: End/resolved-state actions
           description: >-
-            Run once after the monitored entity resolves or the maximum loop
-            count is reached.
+            Run once after the monitored entity remains resolved for the grace
+            period or the maximum loop count is reached.
           default: []
           selector:
             action:
@@ -111,7 +124,9 @@ variables:
   watched_entity: !input monitored_entity
   error_state: !input active_state
   end_state: !input resolved_state
+  resolution_grace_duration: !input resolution_grace
   max_loop_count: !input max_loops
+  loop_finished: false
 
 triggers:
   - triggers: !input start_triggers
@@ -130,7 +145,8 @@ actions:
         - condition: template
           value_template: >-
             {{
-              is_state(watched_entity, error_state)
+              not loop_finished
+              and is_state(watched_entity, error_state)
               and (
                 max_loop_count | int(0) == 0
                 or repeat.index <= max_loop_count | int(0)
@@ -148,10 +164,23 @@ actions:
           timeout: !input loop_interval
           continue_on_timeout: true
 
-        # A completed wait means the entity resolved. Ending this iteration lets
-        # the while condition re-evaluate false and exit the loop.
-        - condition: template
-          value_template: "{{ not wait.completed }}"
+        - alias: Confirm resolution remains stable during the grace period
+          if:
+            - condition: template
+              value_template: "{{ wait.completed }}"
+          then:
+            - alias: Wait for activity to return during the grace period
+              wait_template: "{{ is_state(watched_entity, error_state) }}"
+              timeout: !input resolution_grace
+              continue_on_timeout: true
+
+            - alias: Mark the loop finished if activity did not return
+              if:
+                - condition: template
+                  value_template: "{{ not wait.completed }}"
+              then:
+                - variables:
+                    loop_finished: true
 
   - alias: Run end actions once
     sequence: !input end_actions
