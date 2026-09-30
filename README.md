@@ -6,7 +6,7 @@ Reusable Home Assistant automation blueprints for state-aware alerts and action 
 
 ### Auto Annoyer: Repeat any actions until a state is resolved
 
-Any door left open. Any bad temp in a machine. Any package is detected. 
+Any door left open. Any bad temp in a machine. Any package is detected.
 
 Basically anything that needs to be addressed and is detectable by home assistant.
 
@@ -20,7 +20,7 @@ Example: Bug yourself because your server is overheating.
 
 Bug people with automation™
 
-Once they resolve the issue, stop being annoying and play a happy noise and congratulate 
+Once they resolve the issue, stop being annoying and play a happy noise and congratulate
 them. Or something whatever idc
 
 ---
@@ -30,6 +30,10 @@ editor, runs optional start actions once, repeats any user-configured action lis
 while a binary state remains active, and runs optional end actions once when the
 state resolves. Repeating actions can use `{{ loop_index }}` or `{{ repeat.index }}`
 in templates.
+
+An optional **Maximum loops** setting provides a hard safety cap for long-running
+automations. Leave it at `0` for unlimited behavior. When the cap is reached,
+the loop ends and the configured end actions run.
 
 [View blueprint](blueprints/automation/repeat_actions_until_resolved.yaml)
 
