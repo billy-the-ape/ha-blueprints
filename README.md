@@ -31,6 +31,10 @@ while a binary state remains active, and runs optional end actions once when the
 state resolves. Repeating actions can use `{{ loop_index }}` or `{{ repeat.index }}`
 in templates.
 
+An optional **Activation grace period** waits briefly after the start trigger for
+the monitored entity to become active. This is useful when a trigger entity updates
+before a derived/template monitored entity catches up.
+
 An optional **Resolution grace period** requires the monitored entity to remain in
 its resolved state continuously before the loop ends. If the entity becomes active
 again during the grace period, the loop continues.
