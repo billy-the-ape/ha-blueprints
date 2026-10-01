@@ -1,12 +1,13 @@
 blueprint:
   name: Repeat any actions until a state is resolved
   description: >-
-    Start from any user-configured Home Assistant trigger, run optional start
-    actions once, repeat any user-configured actions while a monitored entity
-    remains active, and run optional end actions once when that entity remains
-    resolved for the configured grace period or the configured maximum loop
-    count is reached. Repeating actions can use {{ loop_index }} or
-    {{ repeat.index }} in templates.
+    Start from any user-configured Home Assistant trigger, optionally wait for
+    the monitored entity to become active, run optional start actions once,
+    repeat any user-configured actions while the monitored entity remains
+    active, and run optional end actions once when that entity remains resolved
+    for the configured grace period or the configured maximum loop count is
+    reached. Repeating actions can use {{ loop_index }} or {{ repeat.index }} in
+    templates.
   domain: automation
   author: billy-the-ape and OpenAI
   homeassistant:
@@ -24,6 +25,20 @@ blueprint:
             20 minutes.
           selector:
             trigger:
+
+        activation_grace:
+          name: Activation grace period
+          description: >-
+            Maximum time to wait after the start trigger for the monitored
+            entity to reach its active state. This is useful when the trigger
+            changes before a derived/template monitored entity updates. Use
+            0 seconds to require it to already be active.
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 0
+          selector:
+            duration:
 
     state_settings:
       name: Until
@@ -96,7 +111,7 @@ blueprint:
       input:
         start_actions:
           name: Start actions
-          description: Run once after a configured start trigger fires, before iteration 1.
+          description: Run once after a configured start trigger fires and activation is confirmed.
           default: []
           selector:
             action:
@@ -124,6 +139,7 @@ variables:
   watched_entity: !input monitored_entity
   error_state: !input active_state
   end_state: !input resolved_state
+  activation_grace_duration: !input activation_grace
   resolution_grace_duration: !input resolution_grace
   max_loop_count: !input max_loops
   loop_finished: false
@@ -131,11 +147,16 @@ variables:
 triggers:
   - triggers: !input start_triggers
 
-conditions:
-  - condition: template
+actions:
+  - alias: Wait for the monitored entity to become active
+    wait_template: "{{ is_state(watched_entity, error_state) }}"
+    timeout: !input activation_grace
+    continue_on_timeout: true
+
+  - alias: Confirm the monitored entity became active
+    condition: template
     value_template: "{{ is_state(watched_entity, error_state) }}"
 
-actions:
   - alias: Run start actions once
     sequence: !input start_actions
 
